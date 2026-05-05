@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Sunbot Report iOS</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --ios-gray: #F2F2F7;
+            --safe-top: env(safe-area-inset-top, 20px);
+            --safe-bottom: env(safe-area-inset-bottom, 20px);
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--ios-gray);
+            -webkit-tap-highlight-color: transparent;
+        }
+        input, select, textarea { 
+            font-size: 16px !important; /* Bắt buộc 16px để Safari không tự zoom */
+            background-color: white; 
+        }
+        .page-enter { animation: slideIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        /* Hiệu ứng bấm nút */
+        .active-scale:active { transform: scale(0.96); opacity: 0.8; transition: 0.1s; }
+        .loader { border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid #FF6B00; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        const CRITERIA = ["Tập trung & Tham gia", "Tuân thủ quy tắc", "Giải quyết vấn đề", "Hợp tác & Giao tiếp", "An toàn học cụ"];
+        const PHOTOS = ["Hoạt động học", "Sản phẩm trẻ", "Tương tác nhóm", "Thực hành", "Tổng thể lớp", "Khác"];
+        const CHECKLIST = ["Đến lớp đúng giờ", "Đủ học cụ/Robot", "Dạy đúng kịch bản", "Trẻ tham gia tốt", "Dọn dẹp gọn gàng"];
+
+        const compressImg = (src) => new Promise(res => {
+            const img = new Image(); img.src = src;
+            img.onload = () => {
+                const cvs = document.createElement('canvas');
+                const max = 800; 
+                let w = img.width, h = img.height;
+                if(w>h && w>max){ h*=max/w; w=max; } else if(h>max){ w*=max/h; h=max; }
+                cvs.width=w; cvs.height=h;
+                cvs.getContext('2d').drawImage(img,0,0,w,h);
+                res(cvs.toDataURL('image/webp', 0.6)); 
+            };
+        });
+
+        const NavHeader = ({ title }) => (
+            <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200 pt-[var(--safe-top)] px-4 h-14 flex items-center justify-center shadow-sm">
+                <h1 className="font-semibold text-[17px] text-black">{title}</h1>
+            </div>
+        );
+        const SectionTitle = ({ title }) => <h2 className="text-[13px] font-medium text-gray-500 uppercase tracking-wide ml-4 mb-2 mt-6">{title}</h2>;
+        const Card = ({ children, className="" }) => <div className={`bg-white mx-4 rounded-xl overflow-hidden shadow-sm border border-gray-100 ${className}`}>{children}</div>;
+        const ListInput = ({ label, value, onChange, type="text", placeholder, last=false }) => (
+            <div className={`flex items-center justify-between pl-4 pr-0 py-0 ${!last && 'border-b border-gray-100'}`}>
+                <span className="text-[16px] text-black w-32 shrink-0">{label}</span>
+                <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} className="flex-1 h-12 text-right pr-4 text-[16px] text-blue-600 font-medium placeholder-gray-300 outline-none" />
+            </div>
+        );
+        const SegmentedControl = ({ options, selected, onSelect }) => (
+            <div className="mx-4 p-1 bg-gray-200/80 rounded-lg flex text-[13px] font-semibold mb-6">
+                {options.map(opt => (
+                    <button key={opt.key} onClick={()=>onSelect(opt.key)} className={`flex-1 py-2 rounded-md transition-all shadow-sm ${selected===opt.key ? 'bg-white text-black' : 'bg-transparent text-gray-500 shadow-none'}`}>{opt.label}</button>
+                ))}
+            </div>
+        );
+
+        const App = () => {
+            const [data, setData] = useState({
+                school: '', teacher: '', class: '', date: new Date().toISOString().slice(0,10), lesson: '',
+                type: 'REG', checklist: [false,false,false,false,false], studentCount: '', studentNote: '', incident: 'No', incidentDesc: '', 
+                regPhoto: null, criteria: Array(5).fill('Đạt'), comment: '', photos: Array(6).fill().map((_,i)=>({cat:PHOTOS[0], img:null})),
+                outstandingStudents: '', attentionStudents: '', nextMonthPlan: ''
+            });
+            const [loading, setLoading] = useState(false);
+
+            // =========================================================
+            // CHÚ Ý: CHÈN LINK WEB APP URL CỦA BẠN VÀO DÒNG BÊN DƯỚI
+            // =========================================================
+            const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyXRKYQf29V8wv345RQTqvACXbxwYn-kxDop59v3Oc1ll495b442OOJ4h2P8cLGHNrz2A/exec";
+            const EVALUATION_APP_URL = "https://sunbotvietnam.github.io/report/";
+
+            useEffect(() => {
+                const s = localStorage.getItem('sb_ios_v3');
+                if(s) setData(d => ({...d, ...JSON.parse(s), date: new Date().toISOString().slice(0,10)}));
+            }, []);
+            useEffect(() => localStorage.setItem('sb_ios_v3', JSON.stringify({school:data.school, teacher:data.teacher, class:data.class})), [data.school,data.teacher,data.class]);
+
+            const update = (k,v) => setData(p => ({...p, [k]:v}));
+            
+            const handlePhoto = async (e, idx=-1) => {
+                if(!e.target.files[0]) return;
+                const b64 = await compressImg(await new Promise(r=>{ const fr=new FileReader(); fr.onload=ev=>r(ev.target.result); fr.readAsDataURL(e.target.files[0]); }));
+                if(idx===-1) update('regPhoto', b64);
+                else { const p=[...data.photos]; p[idx].img=b64; update('photos', p); }
+            };
+
+            const reportID = useMemo(() => `SB-${(data.school||'').toUpperCase()}-${data.date.replace(/-/g,'')}-${(data.class||'').toUpperCase()}-${data.type}`, [data]);
+
+            const submitToServer = async () => {
+                if(!data.school || !data.lesson || !data.studentCount) return alert("Vui lòng điền đủ: Trường, Bài học, Sĩ số!");
+                if(data.type === 'REG' && !data.regPhoto) return alert("Vui lòng chọn ảnh minh chứng sĩ số!");
+                if(WEB_APP_URL === "DÁN_LINK_WEB_APP_URL_VÀO_ĐÂY") return alert("Bạn chưa chèn link Web App URL vào code HTML!");
+                
+                setLoading(true);
+                const payload = { ...data, reportID: reportID };
+
+                try {
+                    const response = await fetch(WEB_APP_URL, {
+                        method: 'POST',
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    
+                    if(result.status === 'success') {
+                        alert("🎉 GỬI BÁO CÁO THÀNH CÔNG!");
+                        update('lesson', ''); update('studentCount', ''); update('studentNote', ''); update('regPhoto', null);
+                        update('photos', Array(6).fill().map(()=>({cat:PHOTOS[0], img:null})));
+                        window.scrollTo(0, 0); // Cuộn lên đầu trang sau khi gửi thành công
+                    } else {
+                        alert("❌ Lỗi từ Server: " + result.message);
+                    }
+                } catch (error) {
+                    alert("❌ Lỗi mạng: Không thể gửi báo cáo. Vui lòng kiểm tra 4G/Wifi.");
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="page-enter flex flex-col min-h-screen">
+                    {loading && <div className="fixed inset-0 z-[999] bg-black/60 flex flex-col items-center justify-center text-white backdrop-blur-sm"><div className="loader mb-3"></div><div className="font-bold">ĐANG GỬI DỮ LIỆU...</div><div className="text-xs mt-1 text-gray-300">Vui lòng không đóng ứng dụng</div></div>}
+                    
+                    <NavHeader title="Tạo Báo Cáo Ca Học" />
+
+                    {/* LỐI TẮT SANG APP ĐÁNH GIÁ CUỐI NĂM */}
+                    <div className="mx-4 mt-4">
+                        <button
+                            type="button"
+                            onClick={() => window.location.href = EVALUATION_APP_URL}
+                            className="w-full bg-gradient-to-r from-[#FF6B00] to-amber-400 text-white rounded-2xl p-4 shadow-xl shadow-orange-200/60 active-scale flex items-center justify-between"
+                        >
+                            <div className="flex items-center gap-3 text-left">
+                                <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center shadow-inner">
+                                    <i className="fa-solid fa-clipboard-check text-[22px]"></i>
+                                </div>
+                                <div>
+                                    <div className="font-bold text-[16px]">Đánh giá cuối năm</div>
+                                    <div className="text-[12px] text-white/90 font-medium leading-snug">
+                                        Bổ sung ảnh cá nhân & đánh giá 3 tiêu chí
+                                    </div>
+                                </div>
+                            </div>
+                            <i className="fa-solid fa-chevron-right text-white/80 text-[16px]"></i>
+                        </button>
+                    </div>
+                    
+                    <div className="flex-grow">
+                        <SectionTitle title="Thông tin chung" />
+                        <Card>
+                            <ListInput label="Trường" value={data.school} onChange={v=>update('school', v.toUpperCase())} placeholder="HN-QM" />
+                            <ListInput label="Lớp" value={data.class} onChange={v=>update('class', v)} placeholder="B1, B2" />
+                            <ListInput label="Giáo viên" value={data.teacher} onChange={v=>update('teacher', v)} placeholder="Tên GV" />
+                            <ListInput label="Ngày dạy" value={data.date} onChange={v=>update('date', v)} type="date" />
+                            <ListInput label="Bài học" value={data.lesson} onChange={v=>update('lesson', v.toUpperCase())} placeholder="R1-05" last />
+                        </Card>
+
+                        <div className="mt-6 mb-2"><SegmentedControl options={[{key:'REG',label:'Buổi thường'},{key:'EOM',label:'Cuối tháng'}]} selected={data.type} onSelect={v=>update('type',v)} /></div>
+
+                        {data.type === 'REG' ? (
+                            <>
+                                <SectionTitle title="Vận hành & Sĩ số" />
+                                <Card>
+                                    {CHECKLIST.map((c,i) => (
+                                        <div key={i} onClick={()=>{const n=[...data.checklist];n[i]=!n[i];update('checklist',n)}} 
+                                            className="flex items-center justify-between p-4 border-b border-gray-100 last:border-0 active:bg-gray-50">
+                                            <span className="text-[16px] text-gray-900">{c}</span>
+                                            {data.checklist[i] && <i className="fa-solid fa-check text-blue-500 text-lg"></i>}
+                                        </div>
+                                    ))}
+                                    <div className="p-4 bg-gray-50 border-t border-gray-100">
+                                        <div className="mb-4 border-b border-gray-200 pb-4">
+                                            <div className="flex justify-between items-center mb-4">
+                                                <span className="font-medium text-red-500">Sĩ số thực tế (*)</span>
+                                                <input type="number" value={data.studentCount} onChange={e=>update('studentCount',e.target.value)} className="w-20 text-center h-10 rounded border border-gray-300 outline-none focus:border-blue-500 bg-white font-bold text-lg" placeholder="0" />
+                                            </div>
+                                            
+                                            {/* KHU VỰC GHI CHÚ SĨ SỐ RÕ RÀNG */}
+                                            <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                                <label className="text-[12px] font-bold text-gray-500 uppercase mb-2 block"><i className="fa-solid fa-pen-to-square mr-1"></i> Ghi chú sĩ số (Tùy chọn)</label>
+                                                <input type="text" value={data.studentNote} onChange={e=>update('studentNote', e.target.value)} placeholder="VD: Lớp A: 10, vắng 2 bé ốm..." className="w-full h-10 text-[16px] outline-none placeholder-gray-400" />
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-medium text-gray-700">Sự cố phát sinh</span>
+                                            <div className="flex bg-gray-200 rounded-lg p-1 gap-1">
+                                                <button onClick={()=>update('incident','No')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${data.incident==='No'?'bg-white shadow text-green-600':'text-gray-500'}`}>KHÔNG</button>
+                                                <button onClick={()=>update('incident','Yes')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${data.incident==='Yes'?'bg-white shadow text-red-600':'text-gray-500'}`}>CÓ</button>
+                                            </div>
+                                        </div>
+                                        {data.incident==='Yes' && <textarea className="w-full mt-3 p-3 text-[16px] rounded-lg border border-red-200 bg-red-50 text-red-700 outline-none" rows="3" placeholder="Mô tả sự cố..." value={data.incidentDesc} onChange={e=>update('incidentDesc',e.target.value)}></textarea>}
+                                    </div>
+                                </Card>
+
+                                <SectionTitle title="Ảnh minh chứng" />
+                                <div className="mx-4">
+                                    <label className="block w-full aspect-video bg-white rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 active:bg-gray-50 active-scale overflow-hidden shadow-sm">
+                                        {data.regPhoto ? <img src={data.regPhoto} className="w-full h-full object-cover" /> : <><i className="fa-solid fa-camera text-3xl mb-3 text-orange-400"></i><span className="font-bold text-[16px]">Chụp ảnh sĩ số (*)</span></>}
+                                        <input type="file" accept="image/*" className="hidden" onChange={e=>handlePhoto(e)} />
+                                    </label>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <SectionTitle title="Sĩ số & Đánh giá" />
+                                <Card className="divide-y divide-gray-100">
+                                    <div className="p-4 bg-blue-50/50">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <span className="font-bold text-gray-700 text-[16px]">Sĩ số buổi cuối tháng (*)</span>
+                                            <input type="number" value={data.studentCount} onChange={e=>update('studentCount',e.target.value)} className="w-20 text-center h-10 rounded border border-blue-200 text-blue-700 font-bold outline-none focus:border-blue-500 bg-white text-lg" placeholder="0" />
+                                        </div>
+                                        
+                                        {/* KHU VỰC GHI CHÚ SĨ SỐ RÕ RÀNG */}
+                                        <div className="bg-white p-3 rounded-lg border border-blue-100 shadow-sm">
+                                            <label className="text-[12px] font-bold text-gray-500 uppercase mb-2 block"><i className="fa-solid fa-pen-to-square mr-1"></i> Ghi chú sĩ số (Tùy chọn)</label>
+                                            <input type="text" value={data.studentNote} onChange={e=>update('studentNote', e.target.value)} placeholder="VD: Lớp A: 10, vắng 2 bé..." className="w-full h-10 text-[16px] outline-none placeholder-gray-400" />
+                                        </div>
+                                    </div>
+                                    {CRITERIA.map((c,i)=>(
+                                        <div key={i} className="p-4">
+                                            <div className="text-[13px] font-medium text-gray-500 mb-3 uppercase">{c}</div>
+                                            <div className="flex gap-2">
+                                                {['Tốt','Đạt','Hỗ trợ'].map(v => (
+                                                    <button key={v} onClick={()=>{const n=[...data.criteria];n[i]=v;update('criteria',n)}} 
+                                                        className={`flex-1 py-2 text-[14px] font-bold rounded-lg transition-colors ${data.criteria[i]===v ? (v==='Tốt'?'bg-green-100 text-green-700 border-green-200':v==='Đạt'?'bg-blue-100 text-blue-700 border-blue-200':'bg-orange-100 text-orange-700 border-orange-200') : 'bg-gray-100 text-gray-400 border-transparent'} border`}>{v}</button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </Card>
+
+                                <SectionTitle title="Nhận xét chi tiết" />
+                                <Card className="p-4 space-y-5">
+                                    <div><label className="text-[12px] font-bold text-orange-600 uppercase mb-2 block">🌟 Trẻ nổi bật</label><textarea className="w-full p-3 text-[16px] bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-orange-400" rows="2" placeholder="Tên trẻ + Lý do..." value={data.outstandingStudents} onChange={e=>update('outstandingStudents',e.target.value)}></textarea></div>
+                                    <div><label className="text-[12px] font-bold text-red-500 uppercase mb-2 block">⚠️ Trẻ cần lưu tâm</label><textarea className="w-full p-3 text-[16px] bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-orange-400" rows="2" placeholder="Tên trẻ + Lý do..." value={data.attentionStudents} onChange={e=>update('attentionStudents',e.target.value)}></textarea></div>
+                                    <div><label className="text-[12px] font-bold text-gray-500 uppercase mb-2 block">📝 Nhận xét tháng</label><textarea className="w-full p-3 text-[16px] bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-orange-400" rows="4" placeholder="Nhận xét tổng quan..." value={data.comment} onChange={e=>update('comment',e.target.value)}></textarea></div>
+                                    <div><label className="text-[12px] font-bold text-blue-500 uppercase mb-2 block">🎯 Việc cần làm tháng sau</label><textarea className="w-full p-3 text-[16px] bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-orange-400" rows="2" placeholder="Kế hoạch..." value={data.nextMonthPlan} onChange={e=>update('nextMonthPlan',e.target.value)}></textarea></div>
+                                </Card>
+
+                                <SectionTitle title={`Ảnh minh chứng (${data.photos.filter(x=>x.img).length}/6)`} />
+                                <div className="mx-4 grid grid-cols-3 gap-3">
+                                    {data.photos.map((p,i)=>(
+                                        <div key={i} className="relative">
+                                            <select value={p.cat} onChange={e=>{const n=[...data.photos];n[i].cat=e.target.value;update('photos',n)}} className="absolute top-0 w-full text-[9px] font-bold bg-black/60 text-white text-center py-1.5 z-10 border-none outline-none appearance-none rounded-t-lg"><option>{p.cat}</option>{PHOTOS.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                                            <label className="block aspect-square bg-white rounded-lg border border-gray-200 flex items-center justify-center relative overflow-hidden active-scale shadow-sm">
+                                                {p.img ? <img src={p.img} className="w-full h-full object-cover" /> : <i className="fa-solid fa-plus text-gray-300 text-2xl"></i>}
+                                                <input type="file" accept="image/*" className="hidden" onChange={e=>handlePhoto(e,i)} />
+                                            </label>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* KHU VỰC NÚT GỬI - ĐÃ GỠ BỎ FIXED BOTTOM */}
+                    <div className="px-4 pt-10 pb-16 mt-4">
+                        <button onClick={submitToServer} disabled={loading} className="w-full bg-[#FF6B00] text-white h-14 rounded-2xl font-bold text-[17px] active-scale shadow-xl shadow-orange-200/50 flex items-center justify-center gap-2">
+                            <i className="fa-solid fa-paper-plane"></i> GỬI BÁO CÁO NGAY
+                        </button>
+                        <p className="text-center text-gray-400 text-[11px] mt-4 uppercase tracking-wider font-semibold">Sunbot System © 2026</p>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
