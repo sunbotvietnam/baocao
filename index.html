@@ -1,304 +1,580 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Sunbot Giáo viên</title>
-
-    <!-- Sunbot Teacher Portal install icon -->
-    <link rel="manifest" href="./manifest.webmanifest">
-    <meta name="theme-color" content="#FF6B00">
-    <meta name="apple-mobile-web-app-title" content="Sunbot GV">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <link rel="icon" href="./icon.svg" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="./icon-180.png">
-    
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <style>
-        :root {
-            --ios-gray: #F2F2F7;
-            --safe-top: env(safe-area-inset-top, 20px);
-            --safe-bottom: env(safe-area-inset-bottom, 20px);
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-            background-color: var(--ios-gray);
-            -webkit-tap-highlight-color: transparent;
-        }
-        input, select, textarea { 
-            font-size: 16px !important; /* Bắt buộc 16px để Safari không tự zoom */
-            background-color: white; 
-        }
-        .page-enter { animation: slideIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
-        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        
-        /* Hiệu ứng bấm nút */
-        .active-scale:active { transform: scale(0.96); opacity: 0.8; transition: 0.1s; }
-        .loader { border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid #FF6B00; width: 24px; height: 24px; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#FF6B00" />
+  <title>Sunbot GV - Báo cáo ca học</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    :root { --safe-top: env(safe-area-inset-top, 16px); --safe-bottom: env(safe-area-inset-bottom, 18px); }
+    html, body { margin:0; min-height:100%; background:#F2F2F7; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif; -webkit-tap-highlight-color:transparent; }
+    input, select, textarea { font-size:16px !important; background:#fff; }
+    .active-scale:active { transform:scale(.98); opacity:.85; transition:.08s; }
+    .loader { border:3px solid #f3f3f3; border-top:3px solid #FF6B00; border-radius:50%; width:26px; height:26px; animation:spin 1s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .fade { animation: fade .2s ease-out; }
+    @keyframes fade { from { opacity:0; transform:translateY(8px);} to {opacity:1; transform:translateY(0);} }
+  </style>
 </head>
 <body>
-    <div id="root"></div>
+  <div id="app"></div>
+<script>
+(function(){
+  'use strict';
 
-    <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+  // =========================================================
+  // DÁN LINK WEB APP URL CỦA APPS SCRIPT V3 VÀO ĐÂY
+  // Ví dụ: https://script.google.com/macros/s/xxx/exec
+  // =========================================================
+  const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw10ir7IsThcgNNRMU-cWH_6i1L-GK93JSGqyjt0jgWTWwScNlYlHOVXdK6nXaVfz9-UQ/exec";
+  const EVALUATION_APP_URL = "https://sunbotvietnam.github.io/report/";
+  const APP_VERSION = "teacher-report-v3-9-ultra-compact-2026-05";
+  const MAX_IMAGE_PX = 900;
+  const IMAGE_QUALITY = 0.62;
 
-        const CRITERIA = ["Tập trung & Tham gia", "Tuân thủ quy tắc", "Giải quyết vấn đề", "Hợp tác & Giao tiếp", "An toàn học cụ"];
-        const PHOTOS = ["Hoạt động học", "Sản phẩm trẻ", "Tương tác nhóm", "Thực hành", "Tổng thể lớp", "Khác"];
-        const CHECKLIST = ["Đến lớp đúng giờ", "Đủ học cụ/Robot", "Dạy đúng kịch bản", "Trẻ tham gia tốt", "Dọn dẹp gọn gàng"];
+  const CHECKLIST = ["Đến lớp đúng giờ", "Đủ học cụ/Robot", "Dạy đúng kịch bản", "Trẻ tham gia tốt", "Dọn dẹp gọn gàng"];
+  const CRITERIA = ["Tập trung & Tham gia", "Tuân thủ quy tắc", "Giải quyết vấn đề", "Hợp tác & Giao tiếp", "An toàn học cụ"];
+  const PHOTO_CATS = ["Hoạt động học", "Sản phẩm trẻ", "Tương tác nhóm", "Thực hành", "Tổng thể lớp", "Khác"];
+  const CHILD_SIGNALS = ["Hào hứng tham gia", "Biết hợp tác", "Biết chờ lượt", "Biết thử lại", "Biết quan sát robot", "Tự tin hơn", "Có ý tưởng sáng tạo", "Hỗ trợ bạn", "Cần hỗ trợ thêm"];
+  const LESSON_PREFIX_HINT = "Gõ L = Sunbot, Q = STEAM, T = Tổng kết, G = Gigo, K = Các bài còn lại";
+  const SUNBOT_LOGO_URL = "https://static.sunbot.vn/static/images/lesson/11461/logo-sunbot-1.png";
+  const TEACHER_QUOTES = [
+    "Mỗi giờ học tốt bắt đầu từ một người thầy có mặt thật sự với trẻ.",
+    "Dạy công nghệ cho trẻ nhỏ không phải để trẻ thành kỹ sư sớm, mà để trẻ biết tò mò, thử lại và tự tin khám phá.",
+    "Một khoảnh khắc trẻ hiểu ra điều mới chính là phần thưởng đẹp nhất của người dạy.",
+    "Giáo dục STEAM bắt đầu từ đôi mắt biết quan sát và đôi tay dám thử nghiệm.",
+    "Người giáo viên tốt không chỉ truyền đạt bài học, mà còn mở ra cho trẻ một cách nhìn thế giới.",
+    "Hôm nay trẻ biết chờ lượt, hợp tác và thử lại; đó đã là một bước tiến rất đáng ghi nhận.",
+    "Robot là công cụ. Điều quan trọng hơn là trẻ học cách suy nghĩ, lựa chọn và cùng bạn giải quyết nhiệm vụ.",
+    "Một lớp học có giá trị là lớp học để lại trong trẻ sự háo hức muốn khám phá thêm.",
+    "Mỗi báo cáo ca học không chỉ là dữ liệu, mà là dấu vết của một hành trình giáo dục.",
+    "Người dạy trẻ nhỏ cần sự chính xác của người làm nghề và sự ấm áp của người đồng hành."
+  ];
+  const SESSION_QUOTE = TEACHER_QUOTES[Math.floor(Math.random() * TEACHER_QUOTES.length)];
+  const CONFIG_CACHE_KEY = "sunbot_report_config_cache_v35";
+  const CONFIG_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+  const ENROLLMENT_CACHE_PREFIX = "sunbot_enrollment_cache_v35_";
 
-        const compressImg = (src) => new Promise(res => {
-            const img = new Image(); img.src = src;
-            img.onload = () => {
-                const cvs = document.createElement('canvas');
-                const max = 800; 
-                let w = img.width, h = img.height;
-                if(w>h && w>max){ h*=max/w; w=max; } else if(h>max){ w*=max/h; h=max; }
-                cvs.width=w; cvs.height=h;
-                cvs.getContext('2d').drawImage(img,0,0,w,h);
-                res(cvs.toDataURL('image/webp', 0.6)); 
-            };
-        });
+  const DEMO_CONFIG = {
+    teachers: [
+      {teacher_id:"TCH-DEMO-001", teacher_name:"Giáo viên Demo", active:true},
+      {teacher_id:"TCH-HN-DMH", teacher_name:"Đỗ Thị Minh Hằng", active:true}
+    ],
+    schools: [
+      {school_id:"HN-QM", school_name:"Quỳnh Mai", active:true},
+      {school_id:"NA-HHT", school_name:"Hà Huy Tập", active:true}
+    ],
+    classes: [
+      {class_id:"CLS-HN-QM-2526-A1", school_id:"HN-QM", class_name:"A1", student_count:25, active:true},
+      {class_id:"CLS-HN-QM-2526-A4", school_id:"HN-QM", class_name:"A4", student_count:24, active:true},
+      {class_id:"CLS-HN-QM-2526-B2", school_id:"HN-QM", class_name:"B2", student_count:26, active:true},
+      {class_id:"CLS-NA-HHT-2526-4A", school_id:"NA-HHT", class_name:"4A", student_count:23, active:true}
+    ],
+    lessons: [
+      {lesson_id:"LES-TKT-003", lesson_code:"TKT-3", lesson_name:"Tư duy thuật toán 3", program_type:"Niên chế", module:"Robot", active:true},
+      {lesson_id:"LES-Q2-019", lesson_code:"Q2-19", lesson_name:"Bài Q2-19", program_type:"Niên chế", module:"Robot", active:true},
+      {lesson_id:"LES-LV3-B9", lesson_code:"LV3-B9", lesson_name:"LV3-B9", program_type:"Niên chế", module:"Robot", active:true}
+    ],
+    enrollment: [
+      {child_id:"SBK-000001", enrollment_id:"ENR-HN-QM-2526-A1-001", child_name:"Nguyễn Gia Bảo A", school_id:"HN-QM", class_id:"CLS-HN-QM-2526-A1", class_name:"A1", status:"học"},
+      {child_id:"SBK-000002", enrollment_id:"ENR-HN-QM-2526-A1-002", child_name:"Nguyễn Diệu Anh", school_id:"HN-QM", class_id:"CLS-HN-QM-2526-A1", class_name:"A1", status:"học"},
+      {child_id:"SBK-000010", enrollment_id:"ENR-HN-QM-2526-A4-001", child_name:"Trần Minh Khang", school_id:"HN-QM", class_id:"CLS-HN-QM-2526-A4", class_name:"A4", status:"học"}
+    ]
+  };
 
-        const NavHeader = ({ title }) => (
-            <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200 pt-[var(--safe-top)] px-4 h-14 flex items-center justify-center shadow-sm">
-                <h1 className="font-semibold text-[17px] text-black">{title}</h1>
-            </div>
-        );
-        const SectionTitle = ({ title }) => <h2 className="text-[13px] font-medium text-gray-500 uppercase tracking-wide ml-4 mb-2 mt-6">{title}</h2>;
-        const Card = ({ children, className="" }) => <div className={`bg-white mx-4 rounded-xl overflow-hidden shadow-sm border border-gray-100 ${className}`}>{children}</div>;
-        const ListInput = ({ label, value, onChange, type="text", placeholder, last=false }) => (
-            <div className={`flex items-center justify-between pl-4 pr-0 py-0 ${!last && 'border-b border-gray-100'}`}>
-                <span className="text-[16px] text-black w-32 shrink-0">{label}</span>
-                <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} className="flex-1 h-12 text-right pr-4 text-[16px] text-blue-600 font-medium placeholder-gray-300 outline-none" />
-            </div>
-        );
-        const SegmentedControl = ({ options, selected, onSelect }) => (
-            <div className="mx-4 p-1 bg-gray-200/80 rounded-lg flex text-[13px] font-semibold mb-6">
-                {options.map(opt => (
-                    <button key={opt.key} onClick={()=>onSelect(opt.key)} className={`flex-1 py-2 rounded-md transition-all shadow-sm ${selected===opt.key ? 'bg-white text-black' : 'bg-transparent text-gray-500 shadow-none'}`}>{opt.label}</button>
-                ))}
-            </div>
-        );
+  const state = {
+    loading: false,
+    configLoading: true,
+    enrollmentLoading: false,
+    configError: "",
+    enrollmentError: "",
+    config: {teachers:[], schools:[], classes:[], lessons:[], enrollment:[]},
+    data: {
+      teacher_id:"", school_id:"", session_date: todayISO(), lesson_id:"", lesson_search:"",
+      report_type:"REG",
+      selected_classes: [""], class_attendance: {},
+      checklist: CHECKLIST.map(()=>false),
+      incident_status:"NO", incident_desc:"",
+      attendance_photo_b64:"", activity_photo_b64:"",
+      criteria: CRITERIA.map(()=>"Đạt"),
+      monthly_photos: Array(6).fill(0).map(()=>({cat:PHOTO_CATS[0], img:""})),
+      outstanding_children: [], attention_children: [], child_note_text:"",
+      highlight:"", needs_attention:"", teacher_comment:"", next_plan:"",
+      memory_enabled:false, memory_title:"", memory_signal:"", memory_description:"", memory_photo_b64:""
+    },
+    lastResult: null
+  };
 
-        const App = () => {
-            const [data, setData] = useState({
-                school: '', teacher: '', class: '', date: new Date().toISOString().slice(0,10), lesson: '',
-                type: 'REG', checklist: [false,false,false,false,false], studentCount: '', studentNote: '', incident: 'No', incidentDesc: '', 
-                regPhoto: null, criteria: Array(5).fill('Đạt'), comment: '', photos: Array(6).fill().map((_,i)=>({cat:PHOTOS[0], img:null})),
-                outstandingStudents: '', attentionStudents: '', nextMonthPlan: ''
-            });
-            const [loading, setLoading] = useState(false);
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  const norm = (v) => String(v == null ? "" : v).trim();
+  function todayISO(){ return new Date().toISOString().slice(0,10); }
+  function isTruthy(v){ return v === true || String(v).toUpperCase() === 'TRUE' || String(v).toLowerCase() === 'active' || String(v).trim() === ''; }
+  function byId(arr, key, id){ return (arr||[]).find(x => String(x[key]) === String(id)); }
+  function teacher(){ return byId(state.config.teachers, 'teacher_id', state.data.teacher_id) || {}; }
+  function school(){ return byId(state.config.schools, 'school_id', state.data.school_id) || {}; }
+  function lesson(){ return byId(state.config.lessons, 'lesson_id', state.data.lesson_id) || {}; }
+  function classObj(id){ return byId(state.config.classes, 'class_id', id) || {}; }
+  function activeClassesForSchool(){ return state.config.classes.filter(c => c.school_id === state.data.school_id && isTruthy(c.active) && String(c.status || 'active').toLowerCase() !== 'closed'); }
+  function activeChildren(){
+    const set = new Set(state.data.selected_classes.filter(Boolean));
+    return state.config.enrollment.filter(e => set.has(e.class_id) && (!e.status || String(e.status).toLowerCase().includes('học') || String(e.status).toLowerCase().includes('hoc') || String(e.status).toLowerCase()==='active'));
+  }
+  function selectedClassIds(){ return state.data.selected_classes.filter(Boolean); }
+  function totalAttendance(){ return selectedClassIds().reduce((sum, cid) => sum + (Number(state.data.class_attendance[cid]) || 0), 0); }
+  function saveLocal(){
+    const d = state.data;
+    localStorage.setItem("sunbot_report_v3", JSON.stringify({teacher_id:d.teacher_id, school_id:d.school_id, lesson_id:d.lesson_id, lesson_search:d.lesson_search}));
+  }
+  function loadLocal(){
+    try { Object.assign(state.data, JSON.parse(localStorage.getItem("sunbot_report_v3") || "{}")); state.data.session_date = todayISO(); } catch(e) {}
+  }
+  function section(title, sub){ return `<div class="mx-4 mt-3 mb-1"><div class="text-[11px] font-bold tracking-wide uppercase text-gray-500">${esc(title)}</div>${sub ? `<div class="text-[10px] text-gray-400 mt-0.5 leading-tight">${esc(sub)}</div>` : ''}</div>`; }
+  function card(html){ return `<div class="bg-white mx-4 rounded-xl shadow-sm border border-gray-100 overflow-hidden">${html}</div>`; }
+  function optionList(items, valueKey, labelFn, selected, placeholder){ return `<option value="">${esc(placeholder || "Chọn...")}</option>` + (items||[]).map(x => `<option value="${esc(x[valueKey])}" ${String(x[valueKey])===String(selected)?'selected':''}>${esc(labelFn(x))}</option>`).join(''); }
 
-            // =========================================================
-            // CHÚ Ý: CHÈN LINK WEB APP URL CỦA BẠN VÀO DÒNG BÊN DƯỚI
-            // =========================================================
-            const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyXRKYQf29V8wv345RQTqvACXbxwYn-kxDop59v3Oc1ll495b442OOJ4h2P8cLGHNrz2A/exec";
-            const EVALUATION_APP_URL = "https://sunbotvietnam.github.io/report/";
+  function lessonCode(l){ return String(l.lesson_code || l.lesson_id || '').trim().toUpperCase(); }
+  function lessonGroupKey(l){
+    const code = lessonCode(l);
+    if(code.startsWith('L')) return 'L';
+    if(code.startsWith('Q')) return 'Q';
+    if(code.startsWith('T')) return 'T';
+    if(code.startsWith('G')) return 'G';
+    return 'K';
+  }
+  function groupName(key){
+    return ({L:'Sunbot', Q:'STEAM', T:'Tổng kết', G:'Gigo', K:'Các bài còn lại', ALL:'Toàn bộ'})[key] || 'Toàn bộ';
+  }
+  function detectLessonGroup(query){
+    const q = norm(query).toUpperCase();
+    if(!q) return '';
+    const first = q.charAt(0);
+    if(['L','Q','T','G','K'].includes(first)) return first;
+    return 'ALL';
+  }
+  function filteredLessons(){
+    const all = (state.config.lessons||[]).filter(l => isTruthy(l.active));
+    const qRaw = norm(state.data.lesson_search);
+    const q = qRaw.toLowerCase();
+    if(!qRaw) return [];
+    const group = detectLessonGroup(qRaw);
+    let pool = all;
+    if(group && group !== 'ALL') pool = all.filter(l => lessonGroupKey(l) === group);
+    // Nếu giáo viên chỉ gõ 1 chữ nhóm L/Q/T/G/K thì chỉ lọc theo nhóm.
+    if(qRaw.trim().length === 1 && ['l','q','t','g','k'].includes(qRaw.trim().toLowerCase())) return pool;
+    return pool.filter(l => [l.lesson_code,l.lesson_name,l.program_type,l.module,l.theme].join(' ').toLowerCase().includes(q));
+  }
+  function activeLessonCount(){ return (state.config.lessons||[]).filter(l => isTruthy(l.active)).length; }
+  function lessonSearchSummary(){
+    const q = norm(state.data.lesson_search);
+    if(!q) return `Chưa lọc bài. ${LESSON_PREFIX_HINT}.`;
+    const group = detectLessonGroup(q);
+    const shown = filteredLessons().length;
+    if(group && group !== 'ALL') return `Đang hiển thị ${shown} bài thuộc nhóm ${group} · ${groupName(group)}. Tổng danh mục: ${activeLessonCount()} bài.`;
+    return `Đang hiển thị ${shown}/${activeLessonCount()} bài theo từ khóa “${q}”.`;
+  }
 
-            useEffect(() => {
-                const s = localStorage.getItem('sb_ios_v3');
-                if(s) setData(d => ({...d, ...JSON.parse(s), date: new Date().toISOString().slice(0,10)}));
-            }, []);
-            useEffect(() => localStorage.setItem('sb_ios_v3', JSON.stringify({school:data.school, teacher:data.teacher, class:data.class})), [data.school,data.teacher,data.class]);
+  function lessonLabel(l){
+    const code = l.lesson_code || l.lesson_id || '';
+    const name = l.lesson_name || '';
+    return `${code}${name ? ' — ' + name : ''}`;
+  }
+  function normalizeLessonText(v){ return norm(v).toLowerCase().replace(/\s+/g,' '); }
+  function findLessonByInput(input){
+    const target = normalizeLessonText(input);
+    if(!target) return null;
+    return (state.config.lessons || []).find(l => {
+      const label = normalizeLessonText(lessonLabel(l));
+      const code = normalizeLessonText(l.lesson_code || '');
+      const id = normalizeLessonText(l.lesson_id || '');
+      return target === label || target === code || target === id || label.startsWith(target + ' —');
+    }) || null;
+  }
 
-            const update = (k,v) => setData(p => ({...p, [k]:v}));
-            
-            const handlePhoto = async (e, idx=-1) => {
-                if(!e.target.files[0]) return;
-                const b64 = await compressImg(await new Promise(r=>{ const fr=new FileReader(); fr.onload=ev=>r(ev.target.result); fr.readAsDataURL(e.target.files[0]); }));
-                if(idx===-1) update('regPhoto', b64);
-                else { const p=[...data.photos]; p[idx].img=b64; update('photos', p); }
-            };
+  function showFatalError(err){
+    const app = document.getElementById('app');
+    if(app){
+      app.innerHTML = `<div style="padding:16px;font-family:Arial,sans-serif"><div style="background:#fff;border:1px solid #fecaca;border-radius:14px;padding:16px;color:#991b1b"><b>App gặp lỗi hiển thị.</b><br><br><div style="font-size:13px;white-space:pre-wrap">${esc(err && (err.stack || err.message) || err)}</div><br><button onclick="location.reload()" style="background:#ff6b00;color:#fff;border:0;border-radius:10px;padding:10px 14px;font-weight:bold">Tải lại app</button></div></div>`;
+    }
+  }
 
-            const reportID = useMemo(() => `SB-${(data.school||'').toUpperCase()}-${data.date.replace(/-/g,'')}-${(data.class||'').toUpperCase()}-${data.type}`, [data]);
+  function render(){
+    try {
+    const d = state.data;
+    const cfg = state.config;
+    const cls = activeClassesForSchool();
+    const children = activeChildren();
+    const total = totalAttendance();
+    const enrollmentWarning = state.enrollmentError ? `<div class="mx-4 mt-3 p-3 rounded-xl bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm"><b>Lưu ý danh sách trẻ:</b> ${esc(state.enrollmentError)}</div>` : ``;
+    const configWarning = state.configError ? `<div class="mx-4 mt-3 p-3 rounded-xl bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm"><b>Lưu ý:</b> ${esc(state.configError)}</div>` : '';
+    const loadingNotices = `${state.configLoading ? `<div class="mx-4 mt-3 p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-sm flex gap-3 items-start"><div class="loader shrink-0 !w-5 !h-5"></div><div><b>Vui lòng chờ hệ thống tải dữ liệu...</b><br><span class="text-blue-700">Đang tải danh mục giáo viên, trường, lớp và mã bài học. Nếu mạng chậm, app vẫn sẽ mở bằng dữ liệu đã lưu tạm trên máy.</span></div></div>` : ''}${state.enrollmentLoading ? `<div class="mx-4 mt-3 p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-sm flex gap-3 items-start"><div class="loader shrink-0 !w-5 !h-5"></div><div><b>Đang tải danh sách trẻ theo lớp...</b><br><span class="text-blue-700">Vui lòng chờ trong giây lát. Nếu chưa tải xong, cô vẫn có thể tiếp tục điền các phần khác rồi quay lại chọn trẻ.</span></div></div>` : ''}`;
+    const selectedLesson = lesson();
 
-            const submitToServer = async () => {
-                if(!data.school || !data.lesson || !data.studentCount) return alert("Vui lòng điền đủ: Trường, Bài học, Sĩ số!");
-                if(data.type === 'REG' && !data.regPhoto) return alert("Vui lòng chọn ảnh minh chứng sĩ số!");
-                if(WEB_APP_URL === "DÁN_LINK_WEB_APP_URL_VÀO_ĐÂY") return alert("Bạn chưa chèn link Web App URL vào code HTML!");
-                
-                setLoading(true);
-                const payload = { ...data, reportID: reportID };
+    document.getElementById('app').innerHTML = `
+      ${state.loading ? `<div class="fixed inset-0 z-[999] bg-black/60 flex flex-col items-center justify-center text-white backdrop-blur-sm"><div class="loader mb-3"></div><div class="font-bold">ĐANG XỬ LÝ...</div><div class="text-xs mt-1 text-gray-300">Vui lòng không đóng ứng dụng</div></div>` : ''}
+      <div class="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-gray-200 pt-[var(--safe-top)] px-4 py-3 shadow-sm">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center overflow-hidden shrink-0">
+            <img src="${SUNBOT_LOGO_URL}" alt="Sunbot" class="w-10 h-10 object-contain" onerror="this.style.display='none'; this.parentNode.innerHTML='<span class=&quot;text-orange-600 font-black text-xs&quot;>SUN</span>'" />
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="font-bold text-[16px] text-black leading-tight">Báo cáo ca học Sunbot</div>
+            <div class="text-[12px] text-gray-500 leading-snug mt-0.5 italic line-clamp-2">“${esc(SESSION_QUOTE)}”</div>
+          </div>
+        </div>
+      </div>
+      ${loadingNotices}
+      ${configWarning}
+      ${enrollmentWarning}
+      <div class="mx-4 mt-3">
+        <button id="btnEvaluation" class="w-full bg-gradient-to-r from-[#FF6B00] to-amber-400 text-white rounded-xl px-3 py-2.5 shadow-md active-scale flex items-center justify-between text-left">
+          <div class="flex items-center gap-2 min-w-0"><div class="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0"><i class="fa-solid fa-clipboard-check text-[15px]"></i></div><div class="min-w-0"><div class="font-bold text-[14px] leading-tight">Đánh giá trẻ</div><div class="text-[11px] text-white/90 leading-tight truncate">Bổ sung đánh giá cá nhân khi cần</div></div></div><i class="fa-solid fa-chevron-right text-white/80 text-[12px]"></i>
+        </button>
+      </div>
 
-                try {
-                    const response = await fetch(WEB_APP_URL, {
-                        method: 'POST',
-                        body: JSON.stringify(payload)
-                    });
-                    const result = await response.json();
-                    
-                    if(result.status === 'success') {
-                        alert("🎉 GỬI BÁO CÁO THÀNH CÔNG!");
-                        update('lesson', ''); update('studentCount', ''); update('studentNote', ''); update('regPhoto', null);
-                        update('photos', Array(6).fill().map(()=>({cat:PHOTOS[0], img:null})));
-                        window.scrollTo(0, 0); // Cuộn lên đầu trang sau khi gửi thành công
-                    } else {
-                        alert("❌ Lỗi từ Server: " + result.message);
-                    }
-                } catch (error) {
-                    alert("❌ Lỗi mạng: Không thể gửi báo cáo. Vui lòng kiểm tra 4G/Wifi.");
-                } finally {
-                    setLoading(false);
-                }
-            };
+      <div class="mx-4 mt-3 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden p-2 space-y-2">
+        <select id="teacher_id" class="w-full h-10 rounded-lg border border-gray-200 px-3 outline-none focus:border-orange-400 text-gray-900">${optionList(cfg.teachers.filter(t=>isTruthy(t.active)), 'teacher_id', t => t.teacher_name, d.teacher_id, 'Chọn giáo viên')}</select>
+        <select id="school_id" class="w-full h-10 rounded-lg border border-gray-200 px-3 outline-none focus:border-orange-400 text-gray-900">${optionList(cfg.schools.filter(s=>isTruthy(s.active)), 'school_id', s => s.school_name || s.school_id, d.school_id, 'Chọn trường')}</select>
+        <div class="grid grid-cols-2 gap-2">
+          <input id="session_date" type="date" value="${esc(d.session_date)}" class="w-full h-10 rounded-lg border border-gray-200 px-3 outline-none focus:border-orange-400" />
+          <div class="p-1 bg-gray-100 rounded-lg flex text-[12px] font-bold">
+            <button id="typeREG" class="flex-1 py-2 rounded-md transition-all ${d.report_type==='REG'?'bg-white text-black shadow-sm':'text-gray-500'}">Buổi thường</button>
+            <button id="typeEOM" class="flex-1 py-2 rounded-md transition-all ${d.report_type==='EOM'?'bg-white text-black shadow-sm':'text-gray-500'}">Cuối tháng</button>
+          </div>
+        </div>
+        <input id="lesson_combo" list="lesson_options" value="${esc(d.lesson_search || (selectedLesson.lesson_id ? lessonLabel(selectedLesson) : ''))}" class="w-full h-10 rounded-lg border border-gray-200 px-3 outline-none focus:border-orange-400 font-medium text-blue-700" placeholder="Gõ L/Q/T/G/K hoặc mã bài..." autocomplete="off" />
+        <datalist id="lesson_options"></datalist>
+        <div class="flex items-center justify-between gap-2 text-[10px] leading-tight">
+          <div class="text-gray-400 truncate">L: Sunbot · Q: STEAM · T: Tổng kết · G: Gigo · K: Khác</div>
+          <div id="lesson_status" class="text-gray-400 shrink-0">${esc(lessonSearchSummary()).replace('Chưa lọc bài. ', '')}</div>
+        </div>
+        <div id="lesson_selected" class="${selectedLesson.lesson_id ? '' : 'hidden'} px-2 py-1 rounded-lg bg-orange-50 text-orange-800 text-[11px] truncate"><span id="lesson_selected_text">${esc(selectedLesson.lesson_id ? lessonLabel(selectedLesson) : '')}</span></div>
+      </div>
 
-            return (
-                <div className="page-enter flex flex-col min-h-screen">
-                    {loading && <div className="fixed inset-0 z-[999] bg-black/60 flex flex-col items-center justify-center text-white backdrop-blur-sm"><div className="loader mb-3"></div><div className="font-bold">ĐANG GỬI DỮ LIỆU...</div><div className="text-xs mt-1 text-gray-300">Vui lòng không đóng ứng dụng</div></div>}
-                    
-                    <NavHeader title="Tạo Báo Cáo Ca Học" />
+      ${section('Lớp & sĩ số')}
+      ${card(`
+        <div class="p-2 space-y-2">
+          ${!d.school_id ? `<div class="text-sm text-gray-500 px-1 py-2">Chọn trường để hiện lớp.</div>` : classRows(cls)}
+          <div class="flex gap-2 items-center">
+            ${d.school_id ? `<button id="btnAddClass" class="flex-1 h-10 rounded-lg border border-dashed border-orange-300 bg-orange-50 text-orange-700 font-bold active-scale text-sm"><i class="fa-solid fa-plus mr-1"></i>Thêm lớp</button>` : ''}
+            <div class="${d.school_id ? 'w-32' : 'w-full'} h-10 px-3 rounded-lg bg-gray-50 border border-gray-100 flex justify-between items-center"><span class="font-bold text-gray-600 text-sm">Tổng</span><span class="text-xl font-black text-orange-600">${total}</span></div>
+          </div>
+        </div>
+      `)}
 
-                    {/* LỐI TẮT SANG APP ĐÁNH GIÁ CUỐI NĂM */}
-                    <div className="mx-4 mt-4">
-                        <button
-                            type="button"
-                            onClick={() => window.location.href = EVALUATION_APP_URL}
-                            className="w-full bg-gradient-to-r from-[#FF6B00] to-amber-400 text-white rounded-2xl p-4 shadow-xl shadow-orange-200/60 active-scale flex items-center justify-between"
-                        >
-                            <div className="flex items-center gap-3 text-left">
-                                <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center shadow-inner">
-                                    <i className="fa-solid fa-clipboard-check text-[22px]"></i>
-                                </div>
-                                <div>
-                                    <div className="font-bold text-[16px]">Đánh giá cuối năm</div>
-                                    <div className="text-[12px] text-white/90 font-medium leading-snug">
-                                        Bổ sung ảnh cá nhân & đánh giá 3 tiêu chí
-                                    </div>
-                                </div>
-                            </div>
-                            <i className="fa-solid fa-chevron-right text-white/80 text-[16px]"></i>
-                        </button>
-                    </div>
-                    
-                    <div className="flex-grow">
-                        <SectionTitle title="Thông tin chung" />
-                        <Card>
-                            <ListInput label="Trường" value={data.school} onChange={v=>update('school', v.toUpperCase())} placeholder="HN-QM" />
-                            <ListInput label="Lớp" value={data.class} onChange={v=>update('class', v)} placeholder="B1, B2" />
-                            <ListInput label="Giáo viên" value={data.teacher} onChange={v=>update('teacher', v)} placeholder="Tên GV" />
-                            <ListInput label="Ngày dạy" value={data.date} onChange={v=>update('date', v)} type="date" />
-                            <ListInput label="Bài học" value={data.lesson} onChange={v=>update('lesson', v.toUpperCase())} placeholder="R1-05" last />
-                        </Card>
+      ${d.report_type === 'REG' ? renderRegularSection() : renderEndMonthSection(children)}
+      ${d.report_type === 'REG' ? '' : renderChildSection(children)}
+      ${d.report_type === 'REG' ? '' : renderCommentSection()}
+      ${d.report_type === 'REG' ? renderRegularPhotos(4) : renderEndMonthPhotos(6)}
+      ${renderMemorySection(d.report_type === 'REG' ? 5 : 7)}
 
-                        <div className="mt-6 mb-2"><SegmentedControl options={[{key:'REG',label:'Buổi thường'},{key:'EOM',label:'Cuối tháng'}]} selected={data.type} onSelect={v=>update('type',v)} /></div>
+      <div class="px-4 pt-8 pb-20">
+        <button id="submitBtn" class="w-full bg-[#FF6B00] text-white h-14 rounded-2xl font-bold text-[17px] active-scale shadow-xl shadow-orange-200/50 flex items-center justify-center gap-2"><i class="fa-solid fa-paper-plane"></i> GỬI BÁO CÁO</button>
+        ${state.lastResult ? `<div class="mt-4 p-3 rounded-xl bg-green-50 text-green-800 border border-green-200 text-sm"><b>Đã gửi:</b> ${esc(state.lastResult.session_id || '')}</div>` : ''}
+        <p class="text-center text-gray-400 text-[11px] mt-4 uppercase tracking-wider font-semibold">Sunbot System © 2026 · ${APP_VERSION}</p>
+      </div>
+    `;
+    bindEvents();
+    } catch(err) {
+      console.error(err);
+      showFatalError(err);
+    }
+  }
 
-                        {data.type === 'REG' ? (
-                            <>
-                                <SectionTitle title="Vận hành & Sĩ số" />
-                                <Card>
-                                    {CHECKLIST.map((c,i) => (
-                                        <div key={i} onClick={()=>{const n=[...data.checklist];n[i]=!n[i];update('checklist',n)}} 
-                                            className="flex items-center justify-between p-4 border-b border-gray-100 last:border-0 active:bg-gray-50">
-                                            <span className="text-[16px] text-gray-900">{c}</span>
-                                            {data.checklist[i] && <i className="fa-solid fa-check text-blue-500 text-lg"></i>}
-                                        </div>
-                                    ))}
-                                    <div className="p-4 bg-gray-50 border-t border-gray-100">
-                                        <div className="mb-4 border-b border-gray-200 pb-4">
-                                            <div className="flex justify-between items-center mb-4">
-                                                <span className="font-medium text-red-500">Sĩ số thực tế (*)</span>
-                                                <input type="number" value={data.studentCount} onChange={e=>update('studentCount',e.target.value)} className="w-20 text-center h-10 rounded border border-gray-300 outline-none focus:border-blue-500 bg-white font-bold text-lg" placeholder="0" />
-                                            </div>
-                                            
-                                            {/* KHU VỰC GHI CHÚ SĨ SỐ RÕ RÀNG */}
-                                            <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                                                <label className="text-[12px] font-bold text-gray-500 uppercase mb-2 block"><i className="fa-solid fa-pen-to-square mr-1"></i> Ghi chú sĩ số (Tùy chọn)</label>
-                                                <input type="text" value={data.studentNote} onChange={e=>update('studentNote', e.target.value)} placeholder="VD: Lớp A: 10, vắng 2 bé ốm..." className="w-full h-10 text-[16px] outline-none placeholder-gray-400" />
-                                            </div>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="font-medium text-gray-700">Sự cố phát sinh</span>
-                                            <div className="flex bg-gray-200 rounded-lg p-1 gap-1">
-                                                <button onClick={()=>update('incident','No')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${data.incident==='No'?'bg-white shadow text-green-600':'text-gray-500'}`}>KHÔNG</button>
-                                                <button onClick={()=>update('incident','Yes')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${data.incident==='Yes'?'bg-white shadow text-red-600':'text-gray-500'}`}>CÓ</button>
-                                            </div>
-                                        </div>
-                                        {data.incident==='Yes' && <textarea className="w-full mt-3 p-3 text-[16px] rounded-lg border border-red-200 bg-red-50 text-red-700 outline-none" rows="3" placeholder="Mô tả sự cố..." value={data.incidentDesc} onChange={e=>update('incidentDesc',e.target.value)}></textarea>}
-                                    </div>
-                                </Card>
+  function classRows(classes){
+    if(!classes.length) return `<div class="text-sm text-red-600">Chưa có lớp trong CLASS_MASTER cho trường này.</div>`;
+    if(!state.data.selected_classes.length) state.data.selected_classes = [""];
+    return state.data.selected_classes.map((cid, idx)=>{
+      const used = new Set(state.data.selected_classes.filter((x,i)=>x && i!==idx));
+      const opts = classes.filter(c => !used.has(c.class_id) || c.class_id===cid);
+      return `<div class="flex gap-2 items-center rounded-xl border border-gray-100 bg-gray-50 p-2">
+        <select class="class-row-select flex-1 h-10 rounded-lg border border-gray-200 px-2 outline-none focus:border-orange-400" data-idx="${idx}">${optionList(opts,'class_id',c=>`${c.class_name}${c.student_count ? ' · DS '+c.student_count : ''}`, cid, 'Chọn lớp')}</select>
+        <input class="attendance-input w-20 h-10 text-center rounded-lg border border-gray-200 font-bold text-orange-600 outline-none focus:border-orange-400" type="number" min="0" inputmode="numeric" data-classid="${esc(cid)}" value="${esc(cid ? (state.data.class_attendance[cid] || '') : '')}" placeholder="Sĩ số" ${cid?'':'disabled'} />
+        ${state.data.selected_classes.length>1 ? `<button class="btn-remove-class h-10 w-10 rounded-lg bg-red-50 text-red-500" data-idx="${idx}"><i class="fa-solid fa-xmark"></i></button>` : ''}
+      </div>`;
+    }).join('');
+  }
 
-                                <SectionTitle title="Ảnh minh chứng" />
-                                <div className="mx-4">
-                                    <label className="block w-full aspect-video bg-white rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 active:bg-gray-50 active-scale overflow-hidden shadow-sm">
-                                        {data.regPhoto ? <img src={data.regPhoto} className="w-full h-full object-cover" /> : <><i className="fa-solid fa-camera text-3xl mb-3 text-orange-400"></i><span className="font-bold text-[16px]">Chụp ảnh sĩ số (*)</span></>}
-                                        <input type="file" accept="image/*" className="hidden" onChange={e=>handlePhoto(e)} />
-                                    </label>
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <SectionTitle title="Sĩ số & Đánh giá" />
-                                <Card className="divide-y divide-gray-100">
-                                    <div className="p-4 bg-blue-50/50">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <span className="font-bold text-gray-700 text-[16px]">Sĩ số buổi cuối tháng (*)</span>
-                                            <input type="number" value={data.studentCount} onChange={e=>update('studentCount',e.target.value)} className="w-20 text-center h-10 rounded border border-blue-200 text-blue-700 font-bold outline-none focus:border-blue-500 bg-white text-lg" placeholder="0" />
-                                        </div>
-                                        
-                                        {/* KHU VỰC GHI CHÚ SĨ SỐ RÕ RÀNG */}
-                                        <div className="bg-white p-3 rounded-lg border border-blue-100 shadow-sm">
-                                            <label className="text-[12px] font-bold text-gray-500 uppercase mb-2 block"><i className="fa-solid fa-pen-to-square mr-1"></i> Ghi chú sĩ số (Tùy chọn)</label>
-                                            <input type="text" value={data.studentNote} onChange={e=>update('studentNote', e.target.value)} placeholder="VD: Lớp A: 10, vắng 2 bé..." className="w-full h-10 text-[16px] outline-none placeholder-gray-400" />
-                                        </div>
-                                    </div>
-                                    {CRITERIA.map((c,i)=>(
-                                        <div key={i} className="p-4">
-                                            <div className="text-[13px] font-medium text-gray-500 mb-3 uppercase">{c}</div>
-                                            <div className="flex gap-2">
-                                                {['Tốt','Đạt','Hỗ trợ'].map(v => (
-                                                    <button key={v} onClick={()=>{const n=[...data.criteria];n[i]=v;update('criteria',n)}} 
-                                                        className={`flex-1 py-2 text-[14px] font-bold rounded-lg transition-colors ${data.criteria[i]===v ? (v==='Tốt'?'bg-green-100 text-green-700 border-green-200':v==='Đạt'?'bg-blue-100 text-blue-700 border-blue-200':'bg-orange-100 text-orange-700 border-orange-200') : 'bg-gray-100 text-gray-400 border-transparent'} border`}>{v}</button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </Card>
+  function renderRegularSection(){
+    const d=state.data;
+    return `${section('3. Vận hành ca thường')}${card(`<div class="divide-y divide-gray-100">${CHECKLIST.map((x,i)=>`<div class="checkline flex items-center justify-between px-3 py-3 active:bg-gray-50" data-idx="${i}"><span class="text-[15px] text-gray-900">${esc(x)}</span><i class="fa-solid fa-check ${d.checklist[i]?'text-blue-500':'text-gray-200'} text-lg"></i></div>`).join('')}<div class="p-3"><div class="flex justify-between items-center"><span class="font-medium text-gray-700">Sự cố phát sinh</span><div class="flex bg-gray-200 rounded-lg p-1 gap-1"><button id="incidentNo" class="px-4 py-1.5 text-xs font-bold rounded-md ${d.incident_status==='NO'?'bg-white shadow text-green-600':'text-gray-500'}">KHÔNG</button><button id="incidentYes" class="px-4 py-1.5 text-xs font-bold rounded-md ${d.incident_status==='YES'?'bg-white shadow text-red-600':'text-gray-500'}">CÓ</button></div></div>${d.incident_status==='YES' ? `<textarea id="incident_desc" class="w-full mt-3 p-3 rounded-xl border border-red-200 bg-red-50 text-red-700 outline-none" rows="3" placeholder="Mô tả sự cố...">${esc(d.incident_desc)}</textarea>` : ''}</div></div>`)}`;
+  }
 
-                                <SectionTitle title="Nhận xét chi tiết" />
-                                <Card className="p-4 space-y-5">
-                                    <div><label className="text-[12px] font-bold text-orange-600 uppercase mb-2 block">🌟 Trẻ nổi bật</label><textarea className="w-full p-3 text-[16px] bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-orange-400" rows="2" placeholder="Tên trẻ + Lý do..." value={data.outstandingStudents} onChange={e=>update('outstandingStudents',e.target.value)}></textarea></div>
-                                    <div><label className="text-[12px] font-bold text-red-500 uppercase mb-2 block">⚠️ Trẻ cần lưu tâm</label><textarea className="w-full p-3 text-[16px] bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-orange-400" rows="2" placeholder="Tên trẻ + Lý do..." value={data.attentionStudents} onChange={e=>update('attentionStudents',e.target.value)}></textarea></div>
-                                    <div><label className="text-[12px] font-bold text-gray-500 uppercase mb-2 block">📝 Nhận xét tháng</label><textarea className="w-full p-3 text-[16px] bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-orange-400" rows="4" placeholder="Nhận xét tổng quan..." value={data.comment} onChange={e=>update('comment',e.target.value)}></textarea></div>
-                                    <div><label className="text-[12px] font-bold text-blue-500 uppercase mb-2 block">🎯 Việc cần làm tháng sau</label><textarea className="w-full p-3 text-[16px] bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-orange-400" rows="2" placeholder="Kế hoạch..." value={data.nextMonthPlan} onChange={e=>update('nextMonthPlan',e.target.value)}></textarea></div>
-                                </Card>
+  function renderEndMonthSection(){
+    const d=state.data;
+    return `${section('3. Đánh giá cuối tháng')}${card(`<div class="divide-y divide-gray-100">${CRITERIA.map((c,i)=>`<div class="p-4"><div class="text-[13px] font-medium text-gray-500 mb-3 uppercase">${esc(c)}</div><div class="flex gap-2">${['Tốt','Đạt','Hỗ trợ'].map(v=>`<button class="criteria-btn flex-1 py-2 text-[14px] font-bold rounded-lg border ${d.criteria[i]===v ? (v==='Tốt'?'bg-green-100 text-green-700 border-green-200':v==='Đạt'?'bg-blue-100 text-blue-700 border-blue-200':'bg-orange-100 text-orange-700 border-orange-200') : 'bg-gray-100 text-gray-400 border-transparent'}" data-idx="${i}" data-value="${esc(v)}">${esc(v)}</button>`).join('')}</div></div>`).join('')}</div>`)}`;
+  }
 
-                                <SectionTitle title={`Ảnh minh chứng (${data.photos.filter(x=>x.img).length}/6)`} />
-                                <div className="mx-4 grid grid-cols-3 gap-3">
-                                    {data.photos.map((p,i)=>(
-                                        <div key={i} className="relative">
-                                            <select value={p.cat} onChange={e=>{const n=[...data.photos];n[i].cat=e.target.value;update('photos',n)}} className="absolute top-0 w-full text-[9px] font-bold bg-black/60 text-white text-center py-1.5 z-10 border-none outline-none appearance-none rounded-t-lg"><option>{p.cat}</option>{PHOTOS.map(x=><option key={x} value={x}>{x}</option>)}</select>
-                                            <label className="block aspect-square bg-white rounded-lg border border-gray-200 flex items-center justify-center relative overflow-hidden active-scale shadow-sm">
-                                                {p.img ? <img src={p.img} className="w-full h-full object-cover" /> : <i className="fa-solid fa-plus text-gray-300 text-2xl"></i>}
-                                                <input type="file" accept="image/*" className="hidden" onChange={e=>handlePhoto(e,i)} />
-                                            </label>
-                                        </div>
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                    </div>
+  function renderChildSection(children){
+    const d=state.data;
+    return `${section('4. Trẻ nổi bật / cần lưu tâm', 'Danh sách trẻ tự lọc theo trường và lớp đã chọn')}${card(`<div class="p-4 space-y-4">${children.length === 0 ? `<div class="text-sm text-gray-500">Chọn lớp để hiện danh sách trẻ. Nếu hệ thống đang tải, vui lòng chờ vài giây; nếu chưa có REF_ENROLLMENT, ghi nhận xét ở ô bên dưới.</div>` : `<div><label class="text-xs font-bold text-orange-600 uppercase">Trẻ nổi bật</label><select id="outstanding_child_select" class="mt-2 w-full h-12 rounded-xl border border-gray-200 px-3"><option value="">Chọn trẻ để thêm...</option>${children.map(c=>`<option value="${esc(c.child_id)}">${esc(c.child_name)} - ${esc(c.class_name)}</option>`).join('')}</select><div class="mt-2 flex flex-wrap gap-2">${d.outstanding_children.map(id => childChip(id,'outstanding')).join('')}</div></div><div><label class="text-xs font-bold text-red-600 uppercase">Trẻ cần lưu tâm</label><select id="attention_child_select" class="mt-2 w-full h-12 rounded-xl border border-gray-200 px-3"><option value="">Chọn trẻ để thêm...</option>${children.map(c=>`<option value="${esc(c.child_id)}">${esc(c.child_name)} - ${esc(c.class_name)}</option>`).join('')}</select><div class="mt-2 flex flex-wrap gap-2">${d.attention_children.map(id => childChip(id,'attention')).join('')}</div></div>`}<textarea id="child_note_text" class="w-full p-3 rounded-xl border border-gray-200 bg-gray-50" rows="3" placeholder="Ghi chú thêm về trẻ nổi bật/cần lưu tâm...">${esc(d.child_note_text)}</textarea></div>`)}`;
+  }
 
-                    {/* KHU VỰC NÚT GỬI - ĐÃ GỠ BỎ FIXED BOTTOM */}
-                    <div className="px-4 pt-10 pb-16 mt-4">
-                        <button onClick={submitToServer} disabled={loading} className="w-full bg-[#FF6B00] text-white h-14 rounded-2xl font-bold text-[17px] active-scale shadow-xl shadow-orange-200/50 flex items-center justify-center gap-2">
-                            <i className="fa-solid fa-paper-plane"></i> GỬI BÁO CÁO NGAY
-                        </button>
-                        <p className="text-center text-gray-400 text-[11px] mt-4 uppercase tracking-wider font-semibold">Sunbot System © 2026</p>
-                    </div>
-                </div>
-            );
-        };
+  function renderCommentSection(){
+    const d=state.data;
+    const title = d.report_type === 'EOM' ? '5. Nhận xét chi tiết cuối tháng' : '5. Nhận xét ca học';
+    return `${section(title)}${card(`<div class="p-4 space-y-4"><div><label class="text-xs font-bold text-gray-500 uppercase">Điểm nổi bật</label><textarea id="highlight" class="mt-2 w-full p-3 rounded-xl border border-gray-200 bg-gray-50" rows="3" placeholder="Điều lớp làm tốt, khoảnh khắc tích cực...">${esc(d.highlight)}</textarea></div><div><label class="text-xs font-bold text-gray-500 uppercase">Nhận xét chung</label><textarea id="teacher_comment" class="mt-2 w-full p-3 rounded-xl border border-gray-200 bg-gray-50" rows="3" placeholder="Nhận xét ngắn...">${esc(d.teacher_comment)}</textarea></div><div><label class="text-xs font-bold text-blue-600 uppercase">Việc cần làm buổi/tháng sau</label><textarea id="next_plan" class="mt-2 w-full p-3 rounded-xl border border-gray-200 bg-gray-50" rows="2" placeholder="Kế hoạch/lưu ý tiếp theo...">${esc(d.next_plan)}</textarea></div></div>`)}`;
+  }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+  function renderRegularPhotos(sectionNo){ return `${section(String(sectionNo || 4) + '. Ảnh sĩ số', 'Có thể chụp trực tiếp bằng camera hoặc chọn ảnh có sẵn trong máy')}${card(`<div class="p-3">${photoBox('attendance_photo_b64','Ảnh sĩ số (*)', state.data.attendance_photo_b64)}</div>`)}`; }
+
+  function renderEndMonthPhotos(sectionNo){
+    const d = state.data;
+    return `${section(`${sectionNo || 6}. Ảnh minh chứng cuối tháng (${d.monthly_photos.filter(x=>x.img).length}/6)`, 'Mỗi ô ảnh có thể chụp trực tiếp bằng camera hoặc chọn ảnh có sẵn trong máy')}
+    <div class="mx-4 grid grid-cols-2 gap-3">
+      ${d.monthly_photos.map((p,i)=>`
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <select class="monthly-photo-cat w-full text-[11px] font-bold bg-gray-800 text-white text-center py-1.5 border-none outline-none appearance-none" data-idx="${i}">
+            ${PHOTO_CATS.map(x=>`<option value="${esc(x)}" ${p.cat===x?'selected':''}>${esc(x)}</option>`).join('')}
+          </select>
+          <div class="aspect-[4/3] bg-gray-50 flex items-center justify-center overflow-hidden">
+            ${p.img ? `<img src="${p.img}" class="w-full h-full object-cover" />` : `<div class="text-center text-gray-400 px-2"><i class="fa-solid fa-image text-2xl mb-1 text-orange-300"></i><div class="text-[11px] font-semibold">Ảnh ${i+1}</div></div>`}
+          </div>
+          <div class="grid grid-cols-2 gap-2 p-2">
+            <label class="h-9 rounded-lg bg-orange-50 text-orange-700 border border-orange-100 flex items-center justify-center text-[12px] font-bold active-scale"><i class="fa-solid fa-camera mr-1"></i>Chụp<input type="file" accept="image/*" capture="environment" class="hidden monthly-photo-input" data-idx="${i}" /></label>
+            <label class="h-9 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center text-[12px] font-bold active-scale"><i class="fa-solid fa-folder-open mr-1"></i>Chọn<input type="file" accept="image/*" class="hidden monthly-photo-input" data-idx="${i}" /></label>
+          </div>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  function renderMemorySection(sectionNo){
+    const d=state.data;
+    return `${section(String(sectionNo || 7) + '. Thẻ ký ức lớp học', 'Tuỳ chọn, chỉ ghi khi có khoảnh khắc đáng nhớ')}${card(`<div class="p-4"><label class="flex items-center justify-between p-3 rounded-xl bg-orange-50 border border-orange-100"><span class="font-bold text-orange-800">Ca học này có khoảnh khắc đáng nhớ</span><input id="memory_enabled" type="checkbox" class="w-5 h-5" ${d.memory_enabled?'checked':''} /></label>${d.memory_enabled ? `<div class="mt-4 space-y-3 fade"><input id="memory_title" value="${esc(d.memory_title)}" class="w-full h-12 rounded-xl border border-gray-200 px-3" placeholder="Tiêu đề khoảnh khắc: Lần đầu nhóm tự chia vai" /><select id="memory_signal" class="w-full h-12 rounded-xl border border-gray-200 px-3"><option value="">Con đã thể hiện điều gì?</option>${CHILD_SIGNALS.map(x=>`<option value="${esc(x)}" ${d.memory_signal===x?'selected':''}>${esc(x)}</option>`).join('')}</select><textarea id="memory_description" class="w-full p-3 rounded-xl border border-gray-200 bg-gray-50" rows="3" placeholder="Kể ngắn khoảnh khắc này trong 2-3 câu...">${esc(d.memory_description)}</textarea>${photoBox('memory_photo_b64','Thêm ảnh khoảnh khắc (tuỳ chọn)', d.memory_photo_b64)}</div>` : ''}</div>`)}`;
+  }
+
+  function childChip(id, type){ const c = state.config.enrollment.find(x => x.child_id === id) || {child_name:id, class_name:""}; const cls = type === 'outstanding' ? 'bg-orange-50 text-orange-700 border-orange-100' : 'bg-red-50 text-red-700 border-red-100'; return `<button class="child-chip px-3 py-1.5 rounded-full ${cls} border text-xs font-bold" data-type="${type}" data-id="${esc(id)}">${esc(c.child_name)} · ${esc(c.class_name)} ×</button>`; }
+  function photoBox(key, label, val){
+    return `<div class="rounded-xl border border-gray-100 bg-white overflow-hidden shadow-sm">
+      <div class="aspect-[16/9] bg-gray-50 flex items-center justify-center overflow-hidden">
+        ${val ? `<img src="${val}" class="w-full h-full object-cover" />` : `<div class="text-center text-gray-400 px-4"><i class="fa-solid fa-camera text-3xl mb-2 text-orange-400"></i><div class="font-bold text-[15px] text-gray-500">${esc(label)}</div><div class="text-[11px] text-gray-400 mt-1">Có thể chụp mới hoặc lấy ảnh sẵn</div></div>`}
+      </div>
+      <div class="grid grid-cols-2 gap-2 p-3 bg-white">
+        <label class="h-11 rounded-xl bg-orange-50 text-orange-700 border border-orange-100 flex items-center justify-center text-[13px] font-bold active-scale"><i class="fa-solid fa-camera mr-2"></i>Chụp ảnh<input type="file" accept="image/*" capture="environment" class="hidden photo-input" data-key="${key}" /></label>
+        <label class="h-11 rounded-xl bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center text-[13px] font-bold active-scale"><i class="fa-solid fa-folder-open mr-2"></i>Chọn ảnh<input type="file" accept="image/*" class="hidden photo-input" data-key="${key}" /></label>
+      </div>
+    </div>`;
+  }
+  function updateLessonDatalist(){
+    const dl = $('lesson_options');
+    if(!dl) return;
+    const rows = filteredLessons();
+    dl.innerHTML = rows.map(l => `<option value="${esc(lessonLabel(l))}"></option>`).join('');
+  }
+  function updateLessonStatus(){
+    const status = $('lesson_status');
+    if(status) status.textContent = lessonSearchSummary();
+    const box = $('lesson_selected');
+    const txt = $('lesson_selected_text');
+    const selected = lesson();
+    if(box && txt){
+      if(selected.lesson_id){ box.classList.remove('hidden'); txt.textContent = lessonLabel(selected); }
+      else { box.classList.add('hidden'); txt.textContent = ''; }
+    }
+  }
+
+  function bindEvents(){
+    const on = (id, ev, fn) => { const el=$(id); if(el) el.addEventListener(ev, fn); };
+    on('btnEvaluation','click',()=>{ window.location.href = EVALUATION_APP_URL; });
+    on('teacher_id','change',e=>{ state.data.teacher_id=e.target.value; saveLocal(); render(); });
+    on('school_id','change',e=>{ state.data.school_id=e.target.value; state.data.selected_classes=['']; state.data.class_attendance={}; state.data.outstanding_children=[]; state.data.attention_children=[]; saveLocal(); render(); });
+    on('session_date','change',e=>{ state.data.session_date=e.target.value; saveLocal(); });
+    on('lesson_combo','input',e=>{
+      const val = e.target.value;
+      state.data.lesson_search = val;
+      const found = findLessonByInput(val);
+      state.data.lesson_id = found ? found.lesson_id : '';
+      saveLocal();
+      updateLessonDatalist();
+      updateLessonStatus();
+    });
+    on('lesson_combo','change',e=>{
+      const found = findLessonByInput(e.target.value);
+      if(found){ state.data.lesson_id = found.lesson_id; state.data.lesson_search = lessonLabel(found); e.target.value = lessonLabel(found); }
+      saveLocal();
+      updateLessonDatalist();
+      updateLessonStatus();
+    });
+    on('typeREG','click',()=>{ state.data.report_type='REG'; render(); });
+    on('typeEOM','click',()=>{ state.data.report_type='EOM'; render(); });
+    on('btnAddClass','click',()=>{ state.data.selected_classes.push(''); render(); });
+
+    document.querySelectorAll('.class-row-select').forEach(el=>el.addEventListener('change', e=>{
+      const idx = Number(e.target.dataset.idx); const old = state.data.selected_classes[idx]; const val = e.target.value;
+      if(old && old !== val) delete state.data.class_attendance[old];
+      state.data.selected_classes[idx] = val; state.data.outstanding_children=[]; state.data.attention_children=[]; render();
+    }));
+    document.querySelectorAll('.btn-remove-class').forEach(el=>el.addEventListener('click',()=>{ const idx=Number(el.dataset.idx); const old=state.data.selected_classes[idx]; if(old) delete state.data.class_attendance[old]; state.data.selected_classes.splice(idx,1); if(!state.data.selected_classes.length) state.data.selected_classes=['']; state.data.outstanding_children=[]; state.data.attention_children=[]; render(); }));
+    document.querySelectorAll('.attendance-input').forEach(el=>el.addEventListener('input', e=>{ const cid=e.target.dataset.classid; if(cid) state.data.class_attendance[cid] = e.target.value; }));
+    document.querySelectorAll('.attendance-input').forEach(el=>el.addEventListener('change', render));
+    document.querySelectorAll('.checkline').forEach(el=>el.addEventListener('click',()=>{ const idx=Number(el.dataset.idx); state.data.checklist[idx]=!state.data.checklist[idx]; render(); }));
+    document.querySelectorAll('.criteria-btn').forEach(el=>el.addEventListener('click',()=>{ const idx=Number(el.dataset.idx); state.data.criteria[idx]=el.dataset.value; render(); }));
+    on('incidentNo','click',()=>{ state.data.incident_status='NO'; state.data.incident_desc=''; render(); });
+    on('incidentYes','click',()=>{ state.data.incident_status='YES'; render(); });
+    on('incident_desc','input',e=>state.data.incident_desc=e.target.value);
+    on('child_note_text','input',e=>state.data.child_note_text=e.target.value);
+    on('highlight','input',e=>state.data.highlight=e.target.value);
+    on('teacher_comment','input',e=>state.data.teacher_comment=e.target.value);
+    on('next_plan','input',e=>state.data.next_plan=e.target.value);
+    on('outstanding_child_select','change',e=>{ addChild('outstanding_children', e.target.value); e.target.value=''; render(); });
+    on('attention_child_select','change',e=>{ addChild('attention_children', e.target.value); e.target.value=''; render(); });
+    document.querySelectorAll('.child-chip').forEach(el=>el.addEventListener('click',()=>{ const key = el.dataset.type==='outstanding' ? 'outstanding_children' : 'attention_children'; state.data[key] = state.data[key].filter(x=>x!==el.dataset.id); render(); }));
+    document.querySelectorAll('.photo-input').forEach(el=>el.addEventListener('change', handlePhoto));
+    document.querySelectorAll('.monthly-photo-input').forEach(el=>el.addEventListener('change', handleMonthlyPhoto));
+    document.querySelectorAll('.monthly-photo-cat').forEach(el=>el.addEventListener('change',e=>{ const idx=Number(e.target.dataset.idx); state.data.monthly_photos[idx].cat=e.target.value; }));
+    on('memory_enabled','change',e=>{ state.data.memory_enabled=e.target.checked; render(); });
+    on('memory_title','input',e=>state.data.memory_title=e.target.value);
+    on('memory_signal','change',e=>state.data.memory_signal=e.target.value);
+    on('memory_description','input',e=>state.data.memory_description=e.target.value);
+    on('submitBtn','click',submit);
+    updateLessonDatalist();
+    updateLessonStatus();
+  }
+
+  function addChild(key, id){ if(id && !state.data[key].includes(id)) state.data[key].push(id); }
+  async function handlePhoto(e){ const file=e.target.files&&e.target.files[0]; if(!file) return; const key=e.target.dataset.key; try { state.loading=true; render(); state.data[key]=await compressImage(file); } catch(err){ alert('Không xử lý được ảnh.'); } finally { state.loading=false; render(); } }
+  async function handleMonthlyPhoto(e){ const file=e.target.files&&e.target.files[0]; if(!file) return; const idx=Number(e.target.dataset.idx); try { state.loading=true; render(); state.data.monthly_photos[idx].img=await compressImage(file); } catch(err){ alert('Không xử lý được ảnh.'); } finally { state.loading=false; render(); } }
+  function compressImage(file){ return new Promise((resolve,reject)=>{ const reader=new FileReader(); reader.onload=()=>{ const img=new Image(); img.onload=()=>{ let w=img.width,h=img.height; if(w>h&&w>MAX_IMAGE_PX){h=Math.round(h*MAX_IMAGE_PX/w);w=MAX_IMAGE_PX;} else if(h>=w&&h>MAX_IMAGE_PX){w=Math.round(w*MAX_IMAGE_PX/h);h=MAX_IMAGE_PX;} const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h; canvas.getContext('2d').drawImage(img,0,0,w,h); resolve(canvas.toDataURL('image/jpeg',IMAGE_QUALITY)); }; img.onerror=reject; img.src=reader.result; }; reader.onerror=reject; reader.readAsDataURL(file); }); }
+
+  function validate(){
+    const d=state.data;
+    if(!d.teacher_id) return 'Vui lòng chọn giáo viên.';
+    if(!d.school_id) return 'Vui lòng chọn trường.';
+    if(!d.session_date) return 'Vui lòng chọn ngày dạy.';
+    if(!d.lesson_id) return 'Vui lòng chọn bài học.';
+    const ids = selectedClassIds();
+    if(!ids.length) return 'Vui lòng chọn ít nhất 1 lớp.';
+    for(const cid of ids){ const n=Number(d.class_attendance[cid]); const cname=classObj(cid).class_name || cid; if(!Number.isFinite(n)||n<=0) return `Vui lòng nhập sĩ số của lớp ${cname}.`; }
+    if(d.report_type==='REG' && !d.attendance_photo_b64) return 'Vui lòng chụp/chọn ảnh minh chứng sĩ số hoặc lớp học.';
+    if(d.report_type==='EOM' && d.monthly_photos.filter(x=>x.img).length===0) return 'Vui lòng bổ sung ít nhất 1 ảnh minh chứng cuối tháng.';
+    if(d.memory_enabled && (!norm(d.memory_title)||!norm(d.memory_signal)||!norm(d.memory_description))) return 'Thẻ ký ức đã bật. Vui lòng điền đủ tiêu đề, tín hiệu và mô tả.';
+    return '';
+  }
+
+  function buildPayload(){
+    const d=state.data, t=teacher(), s=school(), l=lesson();
+    const classes = selectedClassIds().map(cid=>({ class_id:cid, class_name:classObj(cid).class_name || cid, attendance_count:Number(d.class_attendance[cid])||0 }));
+    const childObj = (id) => { const c=state.config.enrollment.find(x=>x.child_id===id)||{}; return {child_id:id,enrollment_id:c.enrollment_id||'',child_name:c.child_name||id,class_id:c.class_id||'',class_name:c.class_name||''}; };
+    return {
+      app_version: APP_VERSION, action:'submit_report_v2', created_client_at:new Date().toISOString(),
+      teacher_id:d.teacher_id, teacher_name:t.teacher_name||'', school_id:d.school_id, school_name:s.school_name||'', session_date:d.session_date,
+      lesson_id:d.lesson_id, lesson_code:l.lesson_code||'', lesson_name:l.lesson_name||'', report_type:d.report_type, session_type:d.report_type === 'EOM' ? 'END_OF_MONTH' : 'REGULAR',
+      classes, total_attendance:totalAttendance(), checklist:CHECKLIST.map((x,i)=>({item:x,checked:!!d.checklist[i]})),
+      criteria:CRITERIA.map((x,i)=>({item:x,value:d.criteria[i]})), incident_status:d.incident_status, incident_desc:d.incident_desc,
+      attendance_photo_b64:d.attendance_photo_b64, activity_photo_b64:"", memory_photo_b64:d.memory_photo_b64, monthly_photos:d.monthly_photos,
+      highlight:d.highlight, needs_attention:d.child_note_text || '', teacher_comment:d.teacher_comment, next_plan:d.next_plan,
+      outstanding_children:d.outstanding_children.map(childObj), attention_children:d.attention_children.map(childObj),
+      memory:d.memory_enabled ? {title:d.memory_title, child_signal:d.memory_signal, description:d.memory_description} : null
+    };
+  }
+
+  async function submit(){
+    const msg=validate(); if(msg){ alert(msg); return; }
+    if(!WEB_APP_URL || WEB_APP_URL.includes('PASTE_GOOGLE_APPS_SCRIPT')){ alert('Chưa dán WEB_APP_URL của Apps Script trong file HTML.'); return; }
+    state.loading=true; render();
+    try { const res=await fetch(WEB_APP_URL,{method:'POST',body:JSON.stringify(buildPayload())}); const json=await res.json(); if(json.status!=='success') throw new Error(json.message||'Server không trả về success'); state.lastResult=json; resetAfterSubmit(); alert('🎉 Gửi báo cáo thành công!\nMã ca học: '+(json.session_id||'')); window.scrollTo(0,0); }
+    catch(err){ alert('❌ Lỗi gửi báo cáo: '+err.message); }
+    finally{ state.loading=false; render(); }
+  }
+  function resetAfterSubmit(){
+    const d=state.data; d.selected_classes=['']; d.class_attendance={}; d.checklist=CHECKLIST.map(()=>false); d.incident_status='NO'; d.incident_desc=''; d.attendance_photo_b64=''; d.activity_photo_b64=''; d.criteria=CRITERIA.map(()=>"Đạt"); d.monthly_photos=Array(6).fill(0).map(()=>({cat:PHOTO_CATS[0],img:""})); d.outstanding_children=[]; d.attention_children=[]; d.child_note_text=''; d.highlight=''; d.needs_attention=''; d.teacher_comment=''; d.next_plan=''; d.memory_enabled=false; d.memory_title=''; d.memory_signal=''; d.memory_description=''; d.memory_photo_b64='';
+  }
+
+  function selectedClassKey(){ return selectedClassIds().sort().join('|'); }
+  function applyConfig(json){
+    state.config.teachers = json.teachers || [];
+    state.config.schools = json.schools || [];
+    state.config.classes = json.classes || [];
+    state.config.lessons = json.lessons || [];
+    // Không tải toàn bộ danh sách trẻ khi mở app; chỉ tải theo lớp được chọn để tăng tốc.
+    if(json.enrollment) state.config.enrollment = json.enrollment || [];
+  }
+  function loadConfigFromCache(){
+    try{
+      const raw = localStorage.getItem(CONFIG_CACHE_KEY);
+      if(!raw) return false;
+      const cached = JSON.parse(raw);
+      if(!cached || !cached.saved_at || (Date.now() - cached.saved_at > CONFIG_CACHE_TTL_MS)) return false;
+      applyConfig(cached.data || {});
+      state.configError = 'Đang dùng danh mục đã lưu trên máy để mở nhanh; hệ thống sẽ tự cập nhật nền.';
+      return true;
+    } catch(e){ return false; }
+  }
+  function saveConfigToCache(data){
+    try{ localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify({saved_at:Date.now(), data:data})); } catch(e){}
+  }
+  function loadEnrollmentFromCache(key){
+    try{
+      const raw = localStorage.getItem(ENROLLMENT_CACHE_PREFIX + key);
+      if(!raw) return null;
+      const cached = JSON.parse(raw);
+      if(!cached || !cached.saved_at || (Date.now() - cached.saved_at > CONFIG_CACHE_TTL_MS)) return null;
+      return cached.data || [];
+    } catch(e){ return null; }
+  }
+  function saveEnrollmentToCache(key, rows){
+    try{ localStorage.setItem(ENROLLMENT_CACHE_PREFIX + key, JSON.stringify({saved_at:Date.now(), data:rows || []})); } catch(e){}
+  }
+  async function fetchEnrollmentForSelectedClasses(){
+    const ids = selectedClassIds();
+    if(!ids.length || !WEB_APP_URL || WEB_APP_URL.includes('PASTE_GOOGLE_APPS_SCRIPT')) return;
+    const key = selectedClassKey();
+    const cached = loadEnrollmentFromCache(key);
+    if(cached){ state.config.enrollment = cached; state.enrollmentError=''; render(); return; }
+    state.enrollmentLoading = true; state.enrollmentError=''; render();
+    try{
+      const url = WEB_APP_URL + '?action=enrollment&class_ids=' + encodeURIComponent(ids.join(','));
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 7000);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+      const json = await res.json();
+      if(json.status !== 'success') throw new Error(json.message || 'Không tải được danh sách trẻ theo lớp');
+      state.config.enrollment = json.enrollment || [];
+      saveEnrollmentToCache(key, state.config.enrollment);
+    } catch(err){
+      state.enrollmentError = String((err && err.name === 'AbortError') ? 'Tải danh sách trẻ quá lâu. Có thể tiếp tục báo cáo, nhưng chưa chọn được trẻ.' : (err.message || err));
+    } finally { state.enrollmentLoading=false; render(); }
+  }
+
+  async function loadConfig(){
+    const hadCache = loadConfigFromCache();
+    state.configLoading = !hadCache;
+    render();
+    try{
+      if(!WEB_APP_URL || WEB_APP_URL.includes('PASTE_GOOGLE_APPS_SCRIPT')) throw new Error('Chưa dán WEB_APP_URL. Đang dùng dữ liệu demo.');
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 9000);
+      const res = await fetch(WEB_APP_URL + '?action=config&v=' + Date.now(), { signal: controller.signal });
+      clearTimeout(timer);
+      const text = await res.text();
+      let json;
+      try { json = JSON.parse(text); }
+      catch(parseErr) { throw new Error('Apps Script không trả về JSON hợp lệ. Kiểm tra deploy Web App và quyền truy cập.'); }
+      if(json.status !== 'success') throw new Error(json.message || 'Không tải được danh mục');
+      const cfg = {teachers:json.teachers||[], schools:json.schools||[], classes:json.classes||[], lessons:json.lessons||[]};
+      applyConfig(cfg);
+      saveConfigToCache(cfg);
+      state.configError = '';
+      if(selectedClassIds().length) fetchEnrollmentForSelectedClasses();
+    } catch(err){
+      if(!hadCache){
+        state.config = DEMO_CONFIG;
+        state.configError = String((err && err.name === 'AbortError') ? 'Tải danh mục quá lâu. App đang dùng dữ liệu demo để tránh trắng màn hình.' : (err.message || err));
+      } else {
+        state.configError = 'Không cập nhật được danh mục mới, tạm dùng danh mục đã lưu trên máy. Chi tiết: ' + String((err && err.message) || err);
+      }
+    }
+    finally{ state.configLoading=false; render(); }
+  }
+
+  loadLocal();
+  render();
+  loadConfig();
+})();
+</script>
 </body>
 </html>
