@@ -272,6 +272,7 @@
       ${renderMemorySection(d.report_type === 'REG' ? 5 : 7)}
 
       <div class="px-4 pt-8 pb-20">
+        ${d.report_type === 'REG' && checklistMissingCount() ? `<div class="mb-3 p-3 rounded-xl bg-red-50 border border-red-100 text-red-700 text-sm font-bold"><i class="fa-solid fa-circle-exclamation mr-1"></i>Còn ${checklistMissingCount()} mục checklist chưa tick. Cần tick đủ trước khi gửi báo cáo.</div>` : ''}
         <button id="submitBtn" class="w-full bg-[#FF6B00] text-white h-14 rounded-2xl font-bold text-[17px] active-scale shadow-xl shadow-orange-200/50 flex items-center justify-center gap-2"><i class="fa-solid fa-paper-plane"></i> GỬI BÁO CÁO</button>
         ${state.lastResult ? `<div class="mt-4 p-3 rounded-xl bg-green-50 text-green-800 border border-green-200 text-sm"><b>Đã gửi:</b> ${esc(state.lastResult.session_id || '')}</div>` : ''}
         <p class="text-center text-gray-400 text-[11px] mt-4 uppercase tracking-wider font-semibold">Sunbot System © 2026 · ${APP_VERSION}</p>
@@ -301,6 +302,10 @@
   function renderRegularSection(){
     const d=state.data;
     return `${section('3. Vận hành ca thường')}${card(`<div class="divide-y divide-gray-100">${CHECKLIST.map((x,i)=>`<div class="checkline flex items-center justify-between px-3 py-3 active:bg-gray-50" data-idx="${i}"><span class="text-[15px] text-gray-900">${esc(x)}</span><i class="fa-solid fa-check ${d.checklist[i]?'text-blue-500':'text-gray-200'} text-lg"></i></div>`).join('')}<div class="p-3"><div class="flex justify-between items-center"><span class="font-medium text-gray-700">Sự cố phát sinh</span><div class="flex bg-gray-200 rounded-lg p-1 gap-1"><button id="incidentNo" class="px-4 py-1.5 text-xs font-bold rounded-md ${d.incident_status==='NO'?'bg-white shadow text-green-600':'text-gray-500'}">KHÔNG</button><button id="incidentYes" class="px-4 py-1.5 text-xs font-bold rounded-md ${d.incident_status==='YES'?'bg-white shadow text-red-600':'text-gray-500'}">CÓ</button></div></div>${d.incident_status==='YES' ? `<textarea id="incident_desc" class="w-full mt-3 p-3 rounded-xl border border-red-200 bg-red-50 text-red-700 outline-none" rows="3" placeholder="Mô tả sự cố...">${esc(d.incident_desc)}</textarea>` : ''}</div></div>`)}`;
+  }
+
+  function checklistMissingCount(){
+    return CHECKLIST.filter((_, i) => !state.data.checklist[i]).length;
   }
 
   function renderEndMonthSection(){
@@ -448,6 +453,7 @@
     const ids = selectedClassIds();
     if(!ids.length) return 'Vui lòng chọn ít nhất 1 lớp.';
     for(const cid of ids){ const n=Number(d.class_attendance[cid]); const cname=classObj(cid).class_name || cid; if(!Number.isFinite(n)||n<=0) return `Vui lòng nhập sĩ số của lớp ${cname}.`; }
+    if(d.report_type==='REG' && checklistMissingCount()) return `Vui lòng tick đủ ${CHECKLIST.length} mục checklist vận hành trước khi gửi báo cáo.`;
     if(d.report_type==='REG' && !d.attendance_photo_b64) return 'Vui lòng chụp/chọn ảnh minh chứng sĩ số hoặc lớp học.';
     if(d.report_type==='EOM' && d.monthly_photos.filter(x=>x.img).length===0) return 'Vui lòng bổ sung ít nhất 1 ảnh minh chứng cuối tháng.';
     if(d.memory_enabled && (!norm(d.memory_title)||!norm(d.memory_signal)||!norm(d.memory_description))) return 'Thẻ ký ức đã bật. Vui lòng điền đủ tiêu đề, tín hiệu và mô tả.';
